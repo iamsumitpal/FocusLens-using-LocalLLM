@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FocusLens · Overlay Test Page</title>
+  <style>
+    :root {
+      --bg: #0e0e16;
+      --card: #1a1a2e;
+      --text: #f5f5fa;
+      --dim: #a0a0b8;
+      --accent: #7c5cff;
+      --green: #22c55e;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1200px 600px at 20% 0%, #1a1a2e 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 64px 32px;
+      line-height: 1.6;
+    }
+    .container { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 32px; margin-bottom: 8px; }
+    p.lead { color: var(--dim); margin-bottom: 32px; }
+    .card {
+      background: var(--card);
+      border: 1px solid #2a2a44;
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      appearance: none;
+      border: 1px solid #2a2a44;
+      background: #232342;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font: inherit;
+      transition: transform 0.1s, background 0.2s;
+    }
+    button:hover { background: #2d2d54; }
+    button:active { transform: translateY(1px); }
+    button.green { background: var(--green); color: #06210e; border-color: transparent; }
+    button.red   { background: var(--red);   color: #2c0707; border-color: transparent; }
+    code { background: #0a0a14; padding: 2px 6px; border-radius: 4px; color: #c4b8ff; }
+    .hint { color: var(--dim); font-size: 13px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>FocusLens Test Page</h1>
+    <p class="lead">
+      A self-contained sandbox to verify the FocusLens overlay & end-state modals work,
+      <strong>without</strong> requiring LM Studio.
+    </p>
+
+    <div class="card">
+      <h3>Step 1 · Verify the overlay is injected</h3>
+      <p class="hint">If the extension is installed and active, you should see the FocusLens
+        widget briefly appear in the top-right corner when this page loads. If not, start a
+        focus session via the toolbar popup.</p>
+    </div>
+
+    <div class="card">
+      <h3>Step 2 · Simulate score changes</h3>
+      <p class="hint">These buttons trigger the overlay directly (test mode — no LLM needed).</p>
+      <div class="row">
+        <button class="green" onclick="setScore(80, 'pro-goal', 'Highly relevant content for your goal.')">+ Pro-goal (+80)</button>
+        <button onclick="setScore(20, 'pro-goal', 'Lightly relevant content.')">+ Light pro (+20)</button>
+        <button onclick="setScore(-30, 'anti-goal', 'Mildly distracting — social feed.')">– Mild anti (-30)</button>
+        <button class="red" onclick="setScore(-90, 'anti-goal', 'Completely unrelated entertainment.')">– Strong anti (-90)</button>
+        <button onclick="setScore(0, 'pro-goal', 'Neutral.')">Reset to 0</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Step 3 · Trigger end-state modals</h3>
+      <div class="row">
+        <button class="green" onclick="showEnd('congrats', 100)">🎉 Show congrats modal</button>
+        <button class="red"   onclick="showEnd('alert',  -100)">⚠️ Show alert modal</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Notes</h3>
+      <ul>
+        <li>Real classification uses LM Studio at <code>http://127.0.0.1:1234</code>.</li>
+        <li>The overlay element has id <code>#focuslens-overlay</code>; the modal is <code>#focuslens-modal</code>.</li>
+        <li>You can inspect <code>chrome.storage.local.get('session')</code> in the extension's
+          background console.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // These call the *same* DOM helpers the content script uses by dispatching custom events.
+    // We just inject a tiny driver because the content script API isn't exposed globally.
+    function setScore(score, classification, reason) {
+      // Re-create overlay via a synthetic message handler:
+      const ev = new CustomEvent('focuslens:test-update', { detail: { score, classification, reason } });
+      window.dispatchEvent(ev);
+    }
+    function showEnd(endState, score) {
+      const ev = new CustomEvent('focuslens:test-end', { detail: { endState, score } });
+      window.dispatchEvent(ev);
+    }
+
+    // Bridge to content script via DOM (content script registers listeners below).
+    // The content script will see these and update the overlay.
+    window.addEventListener('focuslens:test-update', (e) => {
+      const { score, classification, reason } = e.detail;
+      // Recreate overlay if missing then update directly via known IDs.
+      const overlay = document.getElementById('focuslens-overlay');
+      if (!overlay) {
+        alert('Overlay not found. Is the FocusLens extension loaded?');
+        return;
+      }
+      const pointer = overlay.querySelector('.fl-pointer');
+      const scoreEl = overlay.querySelector('.fl-score');
+      const reasonEl = overlay.querySelector('.fl-reason');
+      const clamped = Math.max(-100, Math.min(100, score));
+      const pct = ((clamped + 100) / 200) * 100;
+      pointer.style.left = pct + '%';
+      scoreEl.textContent = Math.round(clamped);
+      scoreEl.classList.toggle('fl-positive', clamped > 0);
+      scoreEl.classList.toggle('fl-negative', clamped < 0);
+      reasonEl.style.display = 'block';
+      const tag = classification === 'pro-goal' ? '✔ Pro-goal' : '✖ Anti-goal';
+      reasonEl.innerHTML = `<span class="fl-tag fl-tag-${classification === 'pro-goal' ? 'pro' : 'anti'}">${tag}</span> ${reason}`;
+      overlay.classList.add('fl-visible');
+      clearTimeout(window.__flTestTimer);
+      window.__flTestTimer = setTimeout(() => overlay.classList.remove('fl-visible'), 5000);
+    });
+
+    window.addEventListener('focuslens:test-end', (e) => {
+      const { endState, score } = e.detail;
+      // Replicate the same modal markup used in content.js for parity.
+      let modal = document.getElementById('focuslens-modal');
+      if (modal) modal.remove();
+      modal = document.createElement('div');
+      modal.id = 'focuslens-modal';
+      const isCongrats = endState === 'congrats';
+      modal.innerHTML = `
+        <div class="fl-modal-backdrop"></div>
+        <div class="fl-modal-card ${isCongrats ? 'fl-modal-congrats' : 'fl-modal-alert'}">
+          <div class="fl-modal-icon">${isCongrats ? '🎉' : '⚠️'}</div>
+          <h2 class="fl-modal-title">${isCongrats ? 'Goal Achieved!' : 'Focus Lost'}</h2>
+          <p class="fl-modal-body">${
+            isCongrats
+              ? 'Great focus session! You hit +100 — your activity strongly aligned with your goal.'
+              : 'You\\'ve drifted too far from your goal. Take a breath and set a new intention.'
+          }</p>
+          <div class="fl-modal-score">Final score: <strong>${Math.round(score)}</strong></div>
+          <div class="fl-modal-hint">Open FocusLens to set a new goal.</div>
+          <button class="fl-modal-btn">Dismiss</button>
+        </div>
+      `;
+      document.documentElement.appendChild(modal);
+      const dismiss = () => modal.remove();
+      modal.querySelector('.fl-modal-btn').addEventListener('click', dismiss);
+      modal.querySelector('.fl-modal-backdrop').addEventListener('click', dismiss);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FocusLens</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container" data-testid="popup-container">
+    <header class="header">
+      <div class="logo-wrap">
+        <div class="logo-dot"></div>
+        <h1 class="logo-text">FocusLens</h1>
+      </div>
+      <div class="status-pill" id="statusPill" data-testid="status-pill">
+        <span class="status-dot"></span>
+        <span id="statusText">Idle</span>
+      </div>
+    </header>
+
+    <section class="card" id="goalCard">
+      <label class="field-label" for="goalInput">Your Focus Goal</label>
+      <textarea
+        id="goalInput"
+        class="field-input"
+        rows="2"
+        placeholder="e.g. Learn how transformers in LLMs work"
+        data-testid="goal-input"
+      ></textarea>
+
+      <label class="field-label" for="timeInput">Planned Time</label>
+      <div class="row">
+        <select id="timeInput" class="field-input field-select" data-testid="time-select">
+          <option value="15">15 minutes</option>
+          <option value="30" selected>30 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="120">2 hours</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input
+          type="number"
+          id="customTimeInput"
+          class="field-input field-custom-time"
+          min="1"
+          max="600"
+          placeholder="min"
+          style="display:none;"
+          data-testid="custom-time-input"
+        />
+      </div>
+    </section>
+
+    <section class="card stats-card" id="liveCard" style="display:none;">
+      <div class="score-block">
+        <div class="score-label">Focus Score</div>
+        <div class="score-value" id="scoreValue" data-testid="score-value">0</div>
+      </div>
+
+      <div class="scale-mini">
+        <div class="scale-mini-track"></div>
+        <div class="scale-mini-pointer" id="scaleMiniPointer"></div>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta-item">
+          <div class="meta-label">Elapsed</div>
+          <div class="meta-value" id="elapsedValue" data-testid="elapsed-value">0m 0s</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Activities</div>
+          <div class="meta-value" id="activityCount" data-testid="activity-count">0</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Pro / Anti</div>
+          <div class="meta-value">
+            <span class="pro" id="proCount">0</span>
+            <span class="divider">/</span>
+            <span class="anti" id="antiCount">0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card error-card" id="errorCard" style="display:none;">
+      <div class="error-title">LM Studio not reachable</div>
+      <div class="error-body" id="errorBody">
+        Make sure LM Studio is running at <code>http://127.0.0.1:1234</code>,
+        the Qwen3-VL model is loaded, and CORS is enabled in Server settings.
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="startBtn" class="btn btn-primary" data-testid="start-focus-btn">Start Focus</button>
+      <button id="stopBtn" class="btn btn-danger" style="display:none;" data-testid="stop-focus-btn">Stop Focus</button>
+      <button id="resetBtn" class="btn btn-ghost" data-testid="reset-btn">Reset</button>
+    </div>
+
+    <section class="card summary-card" id="summaryCard" style="display:none;">
+      <h3 class="summary-title">Session Summary</h3>
+      <div class="summary-grid">
+        <div><span class="summary-label">Final Score</span><span class="summary-val" id="finalScore">0</span></div>
+        <div><span class="summary-label">Duration</span><span class="summary-val" id="finalDuration">—</span></div>
+        <div><span class="summary-label">Pro-goal</span><span class="summary-val pro" id="finalPro">0</span></div>
+        <div><span class="summary-label">Anti-goal</span><span class="summary-val anti" id="finalAnti">0</span></div>
+      </div>
+      <div class="summary-domains">
+        <div class="summary-label">Top sites</div>
+        <ul id="topSitesList" class="sites-list" data-testid="top-sites-list"></ul>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Local · Private · Qwen3-VL via LM Studio</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
