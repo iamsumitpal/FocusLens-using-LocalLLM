@@ -1,7 +1,10 @@
 // background.js — FocusLens service worker
 
-const LM_STUDIO_URL = 'http://127.0.0.1:1234/v1/chat/completions';
-const MODEL_NAME = 'qwen/qwen3-vl-4b';
+const DEFAULT_LLM_SETTINGS = {
+  provider: 'lmstudio',
+  baseUrl: 'http://127.0.0.1:1234',
+  model: 'qwen/qwen3-vl-4b',
+};
 
 const DEBOUNCE_MS = 10_000;       // minimum 10s between API calls
 const SAME_PAGE_THRESHOLD_MS = 30_000; // re-evaluate same page every 30s
@@ -258,15 +261,53 @@ function tryParseLLMJson(raw) {
   }
 }
 
-async function callLMStudio(messages) {
+async function getLLMSettings() {
+  const { llmSettings } = await chrome.storage.local.get('llmSettings');
+  return { ...DEFAULT_LLM_SETTINGS, ...(llmSettings || {}) };
+}
+
+async function setLLMSettings(partial) {
+  const merged = { ...(await getLLMSettings()), ...partial };
+  await chrome.storage.local.set({ llmSettings: merged });
+  return merged;
+}
+
+function normaliseBaseUrl(url) {
+  if (!url) return '';
+  let u = String(url).trim();
+  u = u.replace(/\/+$/, '');           // strip trailing slashes
+  u = u.replace(/\/v1$/, '');          // strip trailing /v1 if user pasted full path
+  return u;
+}
+
+async function listModels(baseUrl) {
+  const url = `${normaliseBaseUrl(baseUrl)}/v1/models`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    const ids = (data?.data || []).map((m) => m.id).filter(Boolean);
+    return ids;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callLLM(messages) {
+  const settings = await getLLMSettings();
+  const endpoint = `${normaliseBaseUrl(settings.baseUrl)}/v1/chat/completions`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   try {
-    const resp = await fetch(LM_STUDIO_URL, {
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL_NAME,
+        model: settings.model,
         messages,
         temperature: 0.3,
         max_tokens: 200,
@@ -275,7 +316,7 @@ async function callLMStudio(messages) {
     });
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      throw new Error(`LM Studio HTTP ${resp.status}: ${body.slice(0, 200)}`);
+      throw new Error(`LLM server HTTP ${resp.status}: ${body.slice(0, 200)}`);
     }
     const data = await resp.json();
     const content = data?.choices?.[0]?.message?.content;
@@ -346,10 +387,11 @@ async function evaluateActivity(payload) {
 
   let result;
   try {
-    result = await callLMStudio(messages);
+    result = await callLLM(messages);
   } catch (err) {
+    const settings = await getLLMSettings();
     await updateSession((cur) => {
-      cur.lastError = `LM Studio error: ${escapeHtml(err.message || String(err))}<br/>Make sure LM Studio is running at <code>http://127.0.0.1:1234</code>, the Qwen3-VL model is loaded, and CORS is enabled.`;
+      cur.lastError = `LLM error: ${escapeHtml(err.message || String(err))}<br/>Make sure your local LLM server is running at <code>${escapeHtml(settings.baseUrl)}</code>, the model <code>${escapeHtml(settings.model)}</code> is loaded, and CORS is enabled.`;
       return cur;
     });
     notifySessionUpdated();
@@ -456,9 +498,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       switch (msg.type) {
         case 'GET_SESSION': {
           const session = await getSession();
-          return sendResponse({ ok: true, session });
+          const llmSettings = await getLLMSettings();
+          return sendResponse({ ok: true, session, llmSettings });
+        }
+        case 'GET_LLM_SETTINGS': {
+          const llmSettings = await getLLMSettings();
+          return sendResponse({ ok: true, llmSettings });
+        }
+        case 'SAVE_LLM_SETTINGS': {
+          const saved = await setLLMSettings({
+            provider: msg.provider || 'custom',
+            baseUrl: normaliseBaseUrl(msg.baseUrl || ''),
+            model: (msg.model || '').trim(),
+          });
+          return sendResponse({ ok: true, llmSettings: saved });
+        }
+        case 'TEST_LLM_CONNECTION': {
+          const baseUrl = normaliseBaseUrl(msg.baseUrl || '');
+          if (!baseUrl) return sendResponse({ ok: false, error: 'Base URL required' });
+          try {
+            const models = await listModels(baseUrl);
+            return sendResponse({ ok: true, models });
+          } catch (err) {
+            return sendResponse({ ok: false, error: err.message || String(err) });
+          }
         }
         case 'START_SESSION': {
+          const settings = await getLLMSettings();
+          if (!settings.baseUrl || !settings.model) {
+            return sendResponse({ ok: false, error: 'Configure your LLM server first.' });
+          }
           await startSession(msg.goal || '', parseInt(msg.plannedMinutes, 10) || 30);
           return sendResponse({ ok: true });
         }
@@ -504,6 +573,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Initialize storage on install
 chrome.runtime.onInstalled.addListener(async () => {
-  const existing = await chrome.storage.local.get('session');
+  const existing = await chrome.storage.local.get(['session', 'llmSettings']);
   if (!existing.session) await setSession(defaultSession());
+  if (!existing.llmSettings) await chrome.storage.local.set({ llmSettings: { ...DEFAULT_LLM_SETTINGS } });
 });

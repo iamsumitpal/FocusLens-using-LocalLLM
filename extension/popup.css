@@ -209,6 +209,13 @@ html, body {
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
 
+.btn-disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
 /* Summary */
 .summary-title { font-size: 14px; margin-bottom: 10px; }
 .summary-grid {
@@ -246,3 +253,103 @@ html, body {
   letter-spacing: 0.6px;
   margin-top: 2px;
 }
+
+/* ---------- Server card ---------- */
+.server-card { padding: 12px 14px; }
+
+.server-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.server-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex: 0 0 auto;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+.server-dot.ok    { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.server-dot.warn  { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+.server-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+.server-summary {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.18s ease;
+}
+.link-btn:hover { color: #a896ff; }
+
+.server-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hint {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+.hint code {
+  background: var(--bg-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #c4b8ff;
+}
+
+.server-actions-row {
+  align-items: center;
+  margin-top: 12px;
+  gap: 10px;
+}
+.server-save-row {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.btn-secondary {
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.btn-secondary:hover { border-color: var(--accent); }
+
+.test-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-status.ok    { color: var(--green); }
+.test-status.error { color: var(--red); }
+.test-status.loading { color: var(--yellow); }

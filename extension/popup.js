@@ -2,7 +2,30 @@
 
 const $ = (id) => document.getElementById(id);
 
+const PROVIDER_PRESETS = {
+  lmstudio:  { label: 'LM Studio',         baseUrl: 'http://127.0.0.1:1234',  model: 'qwen/qwen3-vl-4b' },
+  ollama:    { label: 'Ollama',            baseUrl: 'http://127.0.0.1:11434', model: 'llama3.2' },
+  llamacpp:  { label: 'llama.cpp / vLLM',  baseUrl: 'http://127.0.0.1:8080',  model: '' },
+  custom:    { label: 'Custom',            baseUrl: '',                       model: '' },
+};
+
 const els = {
+  // server card
+  serverCard: $('serverCard'),
+  serverHeader: $('serverHeader'),
+  serverSummary: $('serverSummary'),
+  serverDot: $('serverDot'),
+  serverToggle: $('serverToggle'),
+  serverBody: $('serverBody'),
+  providerSelect: $('providerSelect'),
+  baseUrlInput: $('baseUrlInput'),
+  testConnBtn: $('testConnBtn'),
+  testStatus: $('testStatus'),
+  modelSelect: $('modelSelect'),
+  modelManualInput: $('modelManualInput'),
+  saveServerBtn: $('saveServerBtn'),
+  cancelServerBtn: $('cancelServerBtn'),
+  // goal + session
   goalInput: $('goalInput'),
   timeInput: $('timeInput'),
   customTimeInput: $('customTimeInput'),
@@ -138,9 +161,154 @@ function sendMessage(message) {
   });
 }
 
+// ---------- LLM server settings ----------
+let currentLLMSettings = null;
+
+function renderServerSummary(settings) {
+  currentLLMSettings = settings || null;
+  const configured = !!(settings && settings.baseUrl && settings.model);
+  if (configured) {
+    const providerLabel = (PROVIDER_PRESETS[settings.provider] || {}).label || 'Custom';
+    els.serverSummary.textContent = `${settings.model} · ${providerLabel}`;
+    els.serverSummary.title = `${settings.model} @ ${settings.baseUrl}`;
+    els.serverDot.classList.remove('error', 'warn');
+    els.serverDot.classList.add('ok');
+    els.startBtn.disabled = false;
+    els.startBtn.classList.remove('btn-disabled');
+  } else {
+    els.serverSummary.textContent = 'Configure LLM server';
+    els.serverSummary.title = '';
+    els.serverDot.classList.remove('ok', 'error');
+    els.serverDot.classList.add('warn');
+    els.startBtn.disabled = true;
+    els.startBtn.classList.add('btn-disabled');
+  }
+}
+
+function openServerEditor(settings) {
+  els.serverBody.style.display = 'flex';
+  const s = settings || currentLLMSettings || { provider: 'lmstudio', baseUrl: '', model: '' };
+  els.providerSelect.value = s.provider || 'custom';
+  els.baseUrlInput.value = s.baseUrl || '';
+  if (s.model) {
+    populateModelSelect([s.model], s.model);
+    els.modelManualInput.value = '';
+  } else {
+    populateModelSelect([], '');
+  }
+  els.testStatus.textContent = '';
+  els.testStatus.className = 'test-status';
+}
+
+function closeServerEditor() {
+  els.serverBody.style.display = 'none';
+}
+
+function populateModelSelect(models, selected) {
+  els.modelSelect.innerHTML = '';
+  if (!models || models.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '— test connection to load models —';
+    els.modelSelect.appendChild(opt);
+    els.modelSelect.disabled = true;
+    return;
+  }
+  els.modelSelect.disabled = false;
+  for (const m of models) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    if (m === selected) opt.selected = true;
+    els.modelSelect.appendChild(opt);
+  }
+}
+
+async function refreshLLMSettings() {
+  const res = await sendMessage({ type: 'GET_LLM_SETTINGS' });
+  if (res && res.ok) renderServerSummary(res.llmSettings);
+}
+
+els.serverToggle.addEventListener('click', () => {
+  if (els.serverBody.style.display === 'flex') closeServerEditor();
+  else openServerEditor();
+});
+
+els.providerSelect.addEventListener('change', () => {
+  const preset = PROVIDER_PRESETS[els.providerSelect.value];
+  if (preset && preset.baseUrl) els.baseUrlInput.value = preset.baseUrl;
+  if (preset && preset.model && !els.modelManualInput.value) {
+    els.modelManualInput.value = preset.model;
+  }
+});
+
+els.testConnBtn.addEventListener('click', async () => {
+  const baseUrl = els.baseUrlInput.value.trim();
+  if (!baseUrl) {
+    els.testStatus.textContent = 'Enter a base URL first';
+    els.testStatus.className = 'test-status error';
+    return;
+  }
+  els.testStatus.textContent = 'Testing…';
+  els.testStatus.className = 'test-status loading';
+  els.testConnBtn.disabled = true;
+  try {
+    const res = await sendMessage({ type: 'TEST_LLM_CONNECTION', baseUrl });
+    if (res.ok) {
+      const models = res.models || [];
+      if (models.length === 0) {
+        els.testStatus.textContent = 'Connected · no models loaded';
+        els.testStatus.className = 'test-status warn';
+        populateModelSelect([], '');
+      } else {
+        const preferred = (currentLLMSettings && currentLLMSettings.model && models.includes(currentLLMSettings.model))
+          ? currentLLMSettings.model
+          : models[0];
+        populateModelSelect(models, preferred);
+        els.modelManualInput.value = '';
+        els.testStatus.textContent = `Connected · ${models.length} model${models.length === 1 ? '' : 's'}`;
+        els.testStatus.className = 'test-status ok';
+      }
+    } else {
+      els.testStatus.textContent = `Failed: ${res.error || 'unknown error'}`;
+      els.testStatus.className = 'test-status error';
+    }
+  } finally {
+    els.testConnBtn.disabled = false;
+  }
+});
+
+els.saveServerBtn.addEventListener('click', async () => {
+  const baseUrl = els.baseUrlInput.value.trim();
+  const model = (els.modelManualInput.value.trim() || els.modelSelect.value || '').trim();
+  if (!baseUrl) {
+    els.testStatus.textContent = 'Base URL is required';
+    els.testStatus.className = 'test-status error';
+    return;
+  }
+  if (!model) {
+    els.testStatus.textContent = 'Select or type a model id';
+    els.testStatus.className = 'test-status error';
+    return;
+  }
+  const res = await sendMessage({
+    type: 'SAVE_LLM_SETTINGS',
+    provider: els.providerSelect.value,
+    baseUrl,
+    model,
+  });
+  if (res.ok) {
+    renderServerSummary(res.llmSettings);
+    closeServerEditor();
+  }
+});
+
+els.cancelServerBtn.addEventListener('click', closeServerEditor);
+
 async function refresh() {
   const res = await sendMessage({ type: 'GET_SESSION' });
   if (res && res.session) {
+    if (res.llmSettings) renderServerSummary(res.llmSettings);
     // Pre-fill from saved goal/time
     if (!res.session.active) {
       if (res.session.goal) els.goalInput.value = res.session.goal;
@@ -182,7 +350,14 @@ els.startBtn.addEventListener('click', async () => {
     minutes = parseInt(els.timeInput.value, 10);
   }
 
-  await sendMessage({ type: 'START_SESSION', goal, plannedMinutes: minutes });
+  const res = await sendMessage({ type: 'START_SESSION', goal, plannedMinutes: minutes });
+  if (!res.ok) {
+    // most likely server not configured — open the editor
+    openServerEditor();
+    els.testStatus.textContent = res.error || 'Could not start session';
+    els.testStatus.className = 'test-status error';
+    return;
+  }
   await refresh();
 });
 
@@ -212,6 +387,10 @@ function stopTicking() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await refresh();
+  // First-run guidance: auto-expand editor if server not fully configured
+  if (!currentLLMSettings || !currentLLMSettings.baseUrl || !currentLLMSettings.model) {
+    openServerEditor(currentLLMSettings);
+  }
   startTicking();
 });
 

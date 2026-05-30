@@ -18,6 +18,60 @@
       </div>
     </header>
 
+    <section class="card server-card" id="serverCard" data-testid="server-card">
+      <div class="server-header" id="serverHeader" data-testid="server-header">
+        <div class="server-status">
+          <span class="server-dot" id="serverDot"></span>
+          <span class="server-summary" id="serverSummary">Configure LLM server</span>
+        </div>
+        <button class="link-btn" id="serverToggle" data-testid="server-toggle" type="button">Edit</button>
+      </div>
+      <div class="server-body" id="serverBody" style="display:none;">
+        <label class="field-label" for="providerSelect">Provider</label>
+        <select id="providerSelect" class="field-input field-select" data-testid="provider-select">
+          <option value="lmstudio">LM Studio</option>
+          <option value="ollama">Ollama</option>
+          <option value="llamacpp">llama.cpp / vLLM</option>
+          <option value="custom">Custom</option>
+        </select>
+
+        <label class="field-label" for="baseUrlInput">Base URL</label>
+        <input
+          type="text"
+          id="baseUrlInput"
+          class="field-input"
+          placeholder="http://127.0.0.1:1234"
+          spellcheck="false"
+          data-testid="base-url-input"
+        />
+        <div class="hint">Any OpenAI-compatible local endpoint with <code>/v1/models</code> and <code>/v1/chat/completions</code>.</div>
+
+        <div class="row server-actions-row">
+          <button id="testConnBtn" class="btn btn-secondary" type="button" data-testid="test-conn-btn">Test connection</button>
+          <span id="testStatus" class="test-status" data-testid="test-status"></span>
+        </div>
+
+        <label class="field-label" for="modelSelect">Model</label>
+        <select id="modelSelect" class="field-input field-select" data-testid="model-select" disabled>
+          <option value="">— test connection to load models —</option>
+        </select>
+        <input
+          type="text"
+          id="modelManualInput"
+          class="field-input"
+          placeholder="Or type a model id manually"
+          spellcheck="false"
+          data-testid="model-manual-input"
+          style="margin-top:6px;"
+        />
+
+        <div class="row server-save-row">
+          <button id="saveServerBtn" class="btn btn-primary" type="button" data-testid="save-server-btn">Save server</button>
+          <button id="cancelServerBtn" class="btn btn-ghost" type="button" data-testid="cancel-server-btn">Cancel</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card" id="goalCard">
       <label class="field-label" for="goalInput">Your Focus Goal</label>
       <textarea
